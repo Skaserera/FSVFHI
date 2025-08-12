@@ -4,21 +4,42 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - uses: r-lib/actions/setup-r@v2
         with:
           r-version: '4.3.3'
+
       - name: Install system deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgdal-dev libgeos-dev libproj-dev
+          sudo apt-get install -y libgdal-dev libgeos-dev libproj-dev libudunits2-dev
+
       - name: Install R packages
         run: |
-          Rscript -e "install.packages(c('sf','terra','raster','exactextractr','dplyr','readr','tidyr','ggplot2','tmap','classInt','units'), repos='https://cloud.r-project.org')"
-      - name: Run pipeline (skips if data missing)
+          Rscript -e "install.packages(c('sf','terra','raster','exactextractr','dplyr','readr','tidyr','ggplot2','tmap','classInt','units','osmdata','httr','jsonlite','xml2','rvest'), repos='https://cloud.r-project.org')"
+
+      - name: Run pipeline
         run: |
           Rscript R/run_all.R
+
+      - name: Commit outputs if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add output/maps/*.png output/tables/*.gpkg || true
+          if ! git diff --cached --quiet; then
+            git commit -m "Update outputs (auto)"
+            git push
+          else
+            echo "No changes to commit."
+          fi

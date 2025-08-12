@@ -1,4 +1,4 @@
-name: isvehi-faenza
+name: fsvfhi
 channels:
   - conda-forge
 dependencies:
@@ -17,7 +17,11 @@ dependencies:
   - r-units
   - r-jupyter
   - r-irkernel
+  - r-osmdata
+  - r-httr
+  - r-jsonlite
+  - r-xml2
+  - r-rvest
   - gdal
   - geos
   - proj
-  - make

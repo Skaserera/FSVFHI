@@ -3,15 +3,14 @@ suppressPackageStartupMessages({
   library(scales)
 })
 
-# Map raw ISTAT columns to indicators.
-# TODO: Adjust the column names to your actual ISTAT CSV headers.
+# Map ISTAT columns to indicators.
+# Adjust column names below to the actual headers in the ISTAT CSV for sections.
 add_indicators <- function(g) {
-  if (!all(c("POP_TOT") %in% names(g))) {
-    stop("Expected POP_TOT in data; adjust field mapping in indicators_faenza.R")
+  # available columns should include at least POP_TOT
+  if (!"POP_TOT" %in% names(g)) {
+    stop("Expected POP_TOT in joined data. Please map your ISTAT CSV columns in indicators_faenza.R")
   }
-  # Safe helper
-  safe_div <- function(num, den) ifelse(den > 0, num / den, NA_real_)
-
+  safe_div <- function(a,b) ifelse(b > 0, a/b, NA_real_)
   g <- g %>% mutate(
     ind_over65        = safe_div(POP_65PLUS, POP_TOT),
     ind_under14       = safe_div(POP_0_14, POP_TOT),
@@ -24,13 +23,13 @@ add_indicators <- function(g) {
                                (DWELLINGS_TOTAL - DWELLINGS_OCCUPIED) / DWELLINGS_TOTAL,
                                NA_real_),
     ind_density       = rescale(pop_density, to = c(0,1), from = range(pop_density, na.rm = TRUE)),
-    ind_impervious    = imperv_mean / 100
+    ind_impervious    = building_cover  # OSM buildings fraction in section [0..1]
   )
   return(g)
 }
 
 minmax_norm <- function(x) {
   rng <- range(x, na.rm = TRUE)
-  if (diff(rng) == 0) return(rep(0.5, length(x)))
+  if (!is.finite(diff(rng)) || diff(rng) == 0) return(rep(0.5, length(x)))
   (x - rng[1]) / (rng[2] - rng[1])
 }
