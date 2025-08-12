@@ -14,22 +14,34 @@ ISTAT_PROV_RA     <- "039"
 # 1) Get Faenza municipal boundary from OSM (no auth)
 get_faenza_boundary_osm <- function() {
   message("Fetching Faenza municipal boundary from OSM…")
-  q <- opq(timeout = 200) %>%
-    add_osm_feature(key="boundary", value="administrative") %>%
-    add_osm_feature(key="admin_level", value="8") %>%
-    add_osm_feature(key="name", value="Faenza")
-  dat <- osmdata_sf(q)
-  if (!is.null(dat$osm_multipolygons) && nrow(dat$osm_multipolygons) > 0) {
-    g <- dat$osm_multipolygons
-  } else if (!is.null(dat$osm_polygons) && nrow(dat$osm_polygons) > 0) {
-    g <- dat$osm_polygons
-  } else {
-    stop("Could not fetch Faenza boundary from OSM.")
+  # Give opq a numeric bbox to avoid bbox_to_string() error
+  bb <- osmdata::getbb("Faenza, Ravenna, Emilia-Romagna, Italy")
+  if (is.null(bb)) {
+    # Fallback bbox (your Faenza study area)
+    bb <- matrix(
+      c(11.821, 44.270,  # xmin, ymin (SW)
+        11.951, 44.355), # xmax, ymax (NE)
+      nrow = 2, byrow = TRUE,
+      dimnames = list(c("x","y"), c("min","max"))
+    )
   }
-  # Keep first feature
+
+  q <- osmdata::opq(bbox = bb, timeout = 200) %>%
+    osmdata::add_osm_feature(key = "boundary", value = "administrative") %>%
+    osmdata::add_osm_feature(key = "admin_level", value = "8") %>%
+    osmdata::add_osm_feature(key = "name", value = "Faenza")
+
+  dat <- osmdata::osmdata_sf(q)
+
+  g <- NULL
+  if (!is.null(dat$osm_multipolygons) && nrow(dat$osm_multipolygons) > 0) g <- dat$osm_multipolygons
+  if (is.null(g) && !is.null(dat$osm_polygons) && nrow(dat$osm_polygons) > 0) g <- dat$osm_polygons
+  if (is.null(g) || nrow(g) == 0) stop("Could not fetch Faenza boundary from OSM.")
+
   g <- g[1, c("name","geometry")]
-  st_make_valid(g) %>% st_transform(32632)
+  sf::st_make_valid(g) %>% sf::st_transform(32632)
 }
+
 
 # 2) Attempt to download ISTAT sections geometry for Emilia-Romagna (BT 2021)
 #    We parse the official page to find region zip links.
