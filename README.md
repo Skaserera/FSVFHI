@@ -1,4 +1,5 @@
 # FSVFHI — Faenza Social Vulnerability to Flood Hazards Index
+
 *(ISVEHI clone for Faenza; English only; same design & workflow)*
 
 This repository builds a **social vulnerability index** for **Faenza** at **census-section** scale,
