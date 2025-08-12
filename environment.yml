@@ -1,0 +1,23 @@
+name: isvehi-faenza
+channels:
+  - conda-forge
+dependencies:
+  - r-base=4.3
+  - r-essentials
+  - r-sf
+  - r-terra
+  - r-raster
+  - r-exactextractr
+  - r-dplyr
+  - r-readr
+  - r-tidyr
+  - r-ggplot2
+  - r-tmap
+  - r-classint
+  - r-units
+  - r-jupyter
+  - r-irkernel
+  - gdal
+  - geos
+  - proj
+  - make
