@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.3.3'
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgdal-dev libgeos-dev libproj-dev
+      - name: Install R packages
+        run: |
+          Rscript -e "install.packages(c('sf','terra','raster','exactextractr','dplyr','readr','tidyr','ggplot2','tmap','classInt','units'), repos='https://cloud.r-project.org')"
+      - name: Run pipeline (skips if data missing)
+        run: |
+          Rscript R/run_all.R
