@@ -3,33 +3,42 @@ suppressPackageStartupMessages({
   library(scales)
 })
 
-# Map ISTAT columns to indicators.
-# Adjust column names below to the actual headers in the ISTAT CSV for sections.
-add_indicators <- function(g) {
-  # available columns should include at least POP_TOT
-  if (!"POP_TOT" %in% names(g)) {
-    stop("Expected POP_TOT in joined data. Please map your ISTAT CSV columns in indicators_faenza.R")
-  }
-  safe_div <- function(a,b) ifelse(b > 0, a/b, NA_real_)
-  g <- g %>% mutate(
-    ind_over65        = safe_div(POP_65PLUS, POP_TOT),
-    ind_under14       = safe_div(POP_0_14, POP_TOT),
-    ind_unemployment  = safe_div(UNEMPLOYED, LABOUR_FORCE),
-    ind_low_edu       = safe_div(ADULTS_LOW_EDU, ADULTS_TOT),
-    ind_foreign       = safe_div(NON_ITALIAN, POP_TOT),
-    ind_single_parent = safe_div(FAM_SINGLE_PARENT, FAM_TOT),
-    ind_elderly_alone = safe_div(HH_ELDERLY_ALONE, HH_TOT),
-    ind_vacancy       = ifelse(DWELLINGS_TOTAL > 0,
-                               (DWELLINGS_TOTAL - DWELLINGS_OCCUPIED) / DWELLINGS_TOTAL,
-                               NA_real_),
-    ind_density       = rescale(pop_density, to = c(0,1), from = range(pop_density, na.rm = TRUE)),
-    ind_impervious    = building_cover  # OSM buildings fraction in section [0..1]
-  )
-  return(g)
-}
-
+# Normalize helper
 minmax_norm <- function(x) {
   rng <- range(x, na.rm = TRUE)
   if (!is.finite(diff(rng)) || diff(rng) == 0) return(rep(0.5, length(x)))
   (x - rng[1]) / (rng[2] - rng[1])
+}
+
+add_indicators <- function(g) {
+  safe_div <- function(a,b) ifelse(is.finite(a) & is.finite(b) & b > 0, a/b, NA_real_)
+
+  # Always try these two:
+  if ("pop_density" %in% names(g))
+    g$ind_density <- rescale(g$pop_density, to = c(0,1), from = range(g$pop_density, na.rm = TRUE))
+  if ("building_cover" %in% names(g))
+    g$ind_impervious <- g$building_cover  # already 0..1 from OSM coverage
+
+  # Derive a few more from the columns you have
+  if (all(c("POP_TOT","HH_TOT") %in% names(g)))
+    g$ind_persons_per_hh <- safe_div(g$POP_TOT, g$HH_TOT)
+
+  if (all(c("HH_TOT","DWELLINGS_TOTAL") %in% names(g)))
+    g$ind_hh_per_dwelling <- safe_div(g$HH_TOT, g$DWELLINGS_TOTAL)
+
+  if (all(c("BUILDINGS_TOTAL","area_km2") %in% names(g)))
+    g$ind_buildings_per_km2 <- safe_div(g$BUILDINGS_TOTAL, g$area_km2)
+
+  # Optional placeholder indicators (will be NA until we add the CSV later)
+  # g$ind_over65        <- safe_div(g$POP_65PLUS, g$POP_TOT)
+  # g$ind_under14       <- safe_div(g$POP_0_14, g$POP_TOT)
+  # g$ind_unemployment  <- safe_div(g$UNEMPLOYED, g$LABOUR_FORCE)
+  # g$ind_low_edu       <- safe_div(g$ADULTS_LOW_EDU, g$ADULTS_TOT)
+  # g$ind_foreign       <- safe_div(g$NON_ITALIAN, g$POP_TOT)
+  # g$ind_elderly_alone <- safe_div(g$HH_ELDERLY_ALONE, g$HH_TOT)
+  # g$ind_vacancy       <- ifelse(g$DWELLINGS_TOTAL > 0,
+  #                               (g$DWELLINGS_TOTAL - g$DWELLINGS_OCCUPIED) / g$DWELLINGS_TOTAL,
+  #                               NA_real_)
+
+  return(g)
 }
