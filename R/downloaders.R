@@ -141,6 +141,7 @@ download_istat_sections_attributes <- function(out_csv) {
 # 4) Compute imperviousness proxy from OSM building footprints
 compute_osm_building_cover <- function(sections_sf, faenza_boundary_sf) {
   message("Fetching OSM buildings within Faenza boundary (as imperviousness proxy)…")
+try_osm <- TRUE
 
   stopifnot("SEZ_ID" %in% names(sections_sf))
   sections_sf <- sf::st_make_valid(sections_sf)
