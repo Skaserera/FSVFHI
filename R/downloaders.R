@@ -168,6 +168,20 @@ try_osm <- TRUE
     geoms <- c(geoms, list(sf::st_geometry(dat$osm_multipolygons)))
   }
 
+  geoms <- list()
+if (try_osm) {
+  q <- osmdata::opq(bbox = c(bb["xmin"], bb["ymin"], bb["xmax"], bb["ymax"]), timeout = 200) |>
+    osmdata::add_osm_feature(key = "building")
+  dat <- tryCatch(osmdata::osmdata_sf(q), error = function(e) NULL)
+  if (!is.null(dat)) {
+    if (!is.null(dat$osm_polygons) && nrow(dat$osm_polygons) > 0)
+      geoms <- c(geoms, list(sf::st_geometry(dat$osm_polygons)))
+    if (!is.null(dat$osm_multipolygons) && nrow(dat$osm_multipolygons) > 0)
+      geoms <- c(geoms, list(sf::st_geometry(dat$osm_multipolygons)))
+  }
+}
+
+
   if (length(geoms) == 0) {
     warning("No OSM building footprints found; setting building_cover = 0.")
     sections_sf$building_cover <- 0
