@@ -141,46 +141,27 @@ download_istat_sections_attributes <- function(out_csv) {
 # 4) Compute imperviousness proxy from OSM building footprints
 compute_osm_building_cover <- function(sections_sf, faenza_boundary_sf) {
   message("Fetching OSM buildings within Faenza boundary (as imperviousness proxy)…")
-try_osm <- TRUE
 
   stopifnot("SEZ_ID" %in% names(sections_sf))
-  sections_sf <- sf::st_make_valid(sections_sf)
+  sections_sf       <- sf::st_make_valid(sections_sf)
   faenza_boundary_sf <- sf::st_make_valid(faenza_boundary_sf)
 
-  # Work in a projected CRS for area calcs
-  sections_sf <- sf::st_transform(sections_sf, 32632)
+  # Project for area calcs
+  sections_sf        <- sf::st_transform(sections_sf, 32632)
   faenza_boundary_sf <- sf::st_transform(faenza_boundary_sf, 32632)
 
-  # get a bbox in WGS84 for the OSM query
+  # OSM query bbox (WGS84)
   bb <- sf::st_bbox(sf::st_transform(faenza_boundary_sf, 4326))
 
   # Query OSM buildings
   q <- osmdata::opq(bbox = c(bb["xmin"], bb["ymin"], bb["xmax"], bb["ymax"]), timeout = 200) |>
     osmdata::add_osm_feature(key = "building")
-  dat <- osmdata::osmdata_sf(q)
-
-  # Collect geometry ONLY (avoid rbind() column mismatch)
-  geoms <- list()
-  if (!is.null(dat$osm_polygons) && nrow(dat$osm_polygons) > 0) {
-    geoms <- c(geoms, list(sf::st_geometry(dat$osm_polygons)))
-  }
-  if (!is.null(dat$osm_multipolygons) && nrow(dat$osm_multipolygons) > 0) {
-    geoms <- c(geoms, list(sf::st_geometry(dat$osm_multipolygons)))
-  }
-
-  geoms <- list()
-if (try_osm) {
-  q <- osmdata::opq(bbox = c(bb["xmin"], bb["ymin"], bb["xmax"], bb["ymax"]), timeout = 200) |>
-    osmdata::add_osm_feature(key = "building")
   dat <- tryCatch(osmdata::osmdata_sf(q), error = function(e) NULL)
-  if (!is.null(dat)) {
-    if (!is.null(dat$osm_polygons) && nrow(dat$osm_polygons) > 0)
-      geoms <- c(geoms, list(sf::st_geometry(dat$osm_polygons)))
-    if (!is.null(dat$osm_multipolygons) && nrow(dat$osm_multipolygons) > 0)
-      geoms <- c(geoms, list(sf::st_geometry(dat$osm_multipolygons)))
-  }
-}
 
+  # Collect geometry ONLY from both layers to avoid rbind column mismatches
+  geoms <- list()
+  if (!is.null(dat) && !is.null(dat$osm_polygons)       && nrow(dat$osm_polygons)       > 0) geoms <- c(geoms, list(sf::st_geometry(dat$osm_polygons)))
+  if (!is.null(dat) && !is.null(dat$osm_multipolygons)  && nrow(dat$osm_multipolygons)  > 0) geoms <- c(geoms, list(sf::st_geometry(dat$osm_multipolygons)))
 
   if (length(geoms) == 0) {
     warning("No OSM building footprints found; setting building_cover = 0.")
@@ -188,45 +169,47 @@ if (try_osm) {
     return(sections_sf)
   }
 
-  # Combine geometries and make an sf
-  combined_sfc <- do.call(c, geoms)             # c() works on sfc to concatenate
-  b <- sf::st_as_sf(data.frame(id = seq_along(combined_sfc)),
-                    geometry = combined_sfc, crs = 4326)
+  combined_sfc <- do.call(c, geoms)
+  b <- sf::st_as_sf(data.frame(id = seq_along(combined_sfc)), geometry = combined_sfc, crs = 4326)
   b <- sf::st_make_valid(b) |> sf::st_transform(32632)
 
-  # Clip to Faenza boundary (fast guard using st_intersects)
+  # Clip buildings to Faenza boundary
   b <- suppressWarnings(sf::st_intersection(b, faenza_boundary_sf))
-
   if (nrow(b) == 0) {
     warning("No buildings after clipping; setting building_cover = 0.")
     sections_sf$building_cover <- 0
     return(sections_sf)
   }
 
-  # Intersect buildings with sections, sum building area per section
-  inter <- suppressWarnings(sf::st_intersection(sections_sf[, c("SEZ_ID")], b))
+  # Intersect with sections and sum building area per section
+  inter <- suppressWarnings(sf::st_intersection(sections_sf[, c("SEZ_ID", "geometry")], b))
   if (nrow(inter) == 0) {
     sections_sf$building_cover <- 0
     return(sections_sf)
   }
 
   inter$area_build <- as.numeric(sf::st_area(inter))
+
+  # DROP GEOMETRY before summarise/join to avoid sf<->sf join errors
   cover_by_sez <- inter |>
+    sf::st_drop_geometry() |>
     dplyr::group_by(SEZ_ID) |>
     dplyr::summarise(area_build = sum(area_build, na.rm = TRUE), .groups = "drop")
 
   # Section area in m²
-  sections_sf$area_km2 <- if (!"area_km2" %in% names(sections_sf)) {
-    as.numeric(sf::st_area(sections_sf)) / 1e6
-  } else sections_sf$area_km2
+  if (!"area_km2" %in% names(sections_sf)) {
+    sections_sf$area_km2 <- as.numeric(sf::st_area(sections_sf)) / 1e6
+  }
   sections_sf$area_m2 <- sections_sf$area_km2 * 1e6
 
-  # Join and compute coverage 0..1
+  # Join as a plain data.frame (no sf in RHS)
   sections_sf <- dplyr::left_join(sections_sf, cover_by_sez, by = "SEZ_ID")
   sections_sf$area_build[is.na(sections_sf$area_build)] <- 0
+
   sections_sf$building_cover <- pmin(1, sections_sf$area_build / sections_sf$area_m2)
 
   sections_sf$area_m2 <- NULL
   sections_sf$area_build <- NULL
   sections_sf
 }
+
